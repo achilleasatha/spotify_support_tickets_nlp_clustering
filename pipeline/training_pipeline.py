@@ -1,53 +1,69 @@
 import pandas as pd
-import numpy as np
 import os
-import scikitplot as skplt
 import matplotlib.pyplot as plt
-from sklearn.model_selection import train_test_split
-from sklearn.pipeline import Pipeline
-from sklearn import preprocessing
-from sklearn.model_selection import GridSearchCV, cross_val_score, train_test_split, KFold
-from sklearn.metrics import classification_report, f1_score, precision_score, recall_score
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.preprocessing import Normalizer
+from sklearn.pipeline import make_pipeline
+from sklearn.feature_extraction.text import TfidfTransformer
+from sklearn.cluster import KMeans
 import pickle
+from time import time
 
 
 class TrainingPipeline:
-    def __init__(self, model, data_path, param_grid=None, data=None, random_state=1337):
-        self.X, self.y = [None, None]
-        self.model = model
-        self.param_grid = param_grid
+    def __init__(self, params=None, data=None, random_state=1337):
+        self.X = None
+        self.params = params
+        self.random_state = random_state
         if data is None:
-            self.data = pd.read_csv(data_path + r'\modelling_data.csv')
+            self.data = pd.read_csv(os.getcwd() + r'\modelling_data.csv')
         else:
             self.data = data
-        self.random_state = random_state
-        self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(self.X,
-                                                                                self.y,
-                                                                                test_size=0.3,
-                                                                                random_state=self.random_state)
-        # rebalance?  # todo
-        self.pipeline = Pipeline([
-                                  ('preprocess', 'preprocessing'),
-                                  ('model', model(random_state=random_state))
-                                  ])  # todo
-        print('Training...')
-        self.pipeline.fit(self.X_train, self.y_train)
-        self.train_predictions,  self.test_predictions = self.model.predict(self.X_train), self.model.predict(self.X_test)
-        if param_grid is not None:
-            self.crossval_gridsearch = self.hyperparam_tuning(self.pipeline, self.X_train, self.y_train, self.param_grid)
-        # cross_validation
-        # results report
+        self.data = self.data.dropna(subset=['message_body'])
+        self.X = self.data['message_body'].values
+        self.pipeline = self.train_model()
+        self.get_results()
+        self.annotate_data()
+        self.export_data()
         self.pickle_model()
 
-    @staticmethod
-    def hyperparam_tuning(model, X_train, y_train, param_grid, cv=10, scoring='precision_weighted'):
-        print('Hyperparameter tuning with gridsearch...')
-        crossval_gridsearch = GridSearchCV(estimator=model, param_grid=param_grid, cv=cv, scoring=scoring)
-        crossval_gridsearch.fit(X_train, y_train)
-        print('-' * 10)
-        print('Best Parameters: ', crossval_gridsearch.best_params_)
-        print('Mean of Cross Validated Scores: ', crossval_gridsearch.best_score_)
-        return crossval_gridsearch
+    def train_model(self):
+        print('Training...')
+        t0 = time()
+        vectorizer = TfidfVectorizer(sublinear_tf=True, max_df=self.params['max_df'],
+                                     min_df=self.params['min_df'],
+                                     stop_words='english',
+                                     ngram_range=self.params['ngrams'])
+        pipeline = make_pipeline(vectorizer, TfidfTransformer(), Normalizer(copy=False),
+                                 KMeans(n_clusters=self.params['clusters'], init='k-means++',
+                                        max_iter=100, n_init=1, verbose=False, random_state=self.random_state))
+        pipeline.fit(self.X)
+        print("done in %0.3fs" % (time() - t0))
+        return pipeline
+
+    def get_results(self):
+        res = self.pipeline.steps[3][1].cluster_centers_.argsort()[:, ::-1]
+        terms = self.pipeline.steps[0][1].get_feature_names()
+        for cluster in range(len(res)):
+            print("> Cluster %d:" % cluster, end='')
+            for ind in res[cluster, :20]:
+                print(' %s' % terms[ind], end='')
+            print('\n')
+
+    def annotate_data(self):
+        topic_map = {0: 'General', 1: 'Update related issue', 2: 'Content related query', 3: 'Technical issue',
+                     4: 'Subscription and account related issue'}
+        self.data['topic_number'] = self.pipeline.predict(self.data['message_body'].values)
+        self.data['topic_name'] = self.data['topic_number'].map(topic_map)
+        self.plot_data_distribution()
+
+    def plot_data_distribution(self):
+        self.data.topic_name.hist(bins=5)
+        plt.xticks(rotation=90)
+        plt.show()
+
+    def export_data(self):
+        self.data.to_csv('annotated_data.csv')
 
     def pickle_model(self):
-        pickle.dump(self.model, open(os.getcwd() + r'\model.pkl', 'wb'))
+        pickle.dump(self.pipeline, open(os.getcwd() + r'\model.pkl', 'wb'))
