@@ -1,36 +1,30 @@
 <!DOCTYPE html>
 <html >
 <head>
-    <meta charset="UTF-8">
-    <title>Support Ticket Clustering</title>
-    <link href='https://fonts.googleapis.com/css?family=Pacifico' rel='stylesheet' type='text/css'>
+  <meta charset="UTF-8">
+  <title>Deployment Tutorial 1</title>
+  <link href='https://fonts.googleapis.com/css?family=Pacifico' rel='stylesheet' type='text/css'>
 <link href='https://fonts.googleapis.com/css?family=Arimo' rel='stylesheet' type='text/css'>
 <link href='https://fonts.googleapis.com/css?family=Hind:300' rel='stylesheet' type='text/css'>
 <link href='https://fonts.googleapis.com/css?family=Open+Sans+Condensed:300' rel='stylesheet' type='text/css'>
-<link rel="stylesheet" type='text/css' href="{{ url_for('static', filename='styles/index.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 
 </head>
 
 <body style="background: #000;">
-
- <div class="login" >
-	    <h3>Support Ticket Clustering</h3>
+ <div class="login">
+	    <h1>Support Ticket Clustering</h1>
 
      <!-- Main Input For Receiving Query to our ML -->
-
     <form action="{{ url_for('predict')}}" method="post">
-    	<input type="text" name="message_type" placeholder="Message Type" />
-        <input type="text" name="author_id" placeholder="Author ID" />
-        <input type="text" name="author_type" placeholder="Author Type" />
-        <input type="text" name="severity" placeholder="Severity" />
-<!--        <input type="text" name="created_at" placeholder="Timestamp" />-->
         <input type="text" name="message_body" placeholder="Message" />
-
         <button type="submit" class="btn btn-primary btn-block btn-large">Classify ticket</button>
     </form>
+
    <br>
    <br>
    {{ prediction_text }}
+
  </div>
 </body>
 </html>
